@@ -1,0 +1,11 @@
+order_id,date,product,category,quantity,price,total_revenue,region
+1001,2026-01-05,Laptop Dell XPS,Electronics,2,25000000,50000000,North
+1002,2026-01-06,iPhone 15 Pro,Electronics,3,28000000,84000000,South
+1003,2026-01-07,Bàn phím cơ,Accessories,10,1500000,15000000,North
+1004,2026-01-08,Chuột Logitech,Accessories,15,800000,12000000,Central
+1005,2026-01-09,Màn hình Dell 27 inch,Electronics,5,6500000,32500000,South
+1006,2026-01-10,Tai nghe Sony,Accessories,8,3200000,25600000,North
+1007,2026-01-11,Laptop Macbook Air,Electronics,4,23000000,92000000,South
+1008,2026-01-12,Ghế công thái học,Furniture,6,4500000,27000000,Central
+1009,2026-01-13,Bàn làm việc nâng hạ,Furniture,2,8500000,17000000,North
+1010,2026-01-14,Webcam Logitech 4K,Accessories,7,2100000,14700000,South
