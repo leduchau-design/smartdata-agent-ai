@@ -51,20 +51,13 @@ st.markdown("""
     border-radius: 8px;
     transition: all 0.2s;
 }
-/* Chat input luôn cố định ở dưới cùng */
-.stChatInput {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    z-index: 9999 !important;
-    padding: 12px 1rem !important;
-    background: var(--background-color, #0e1117) !important;
-    border-top: 1px solid rgba(255,255,255,0.08) !important;
+/* Chat input - để Streamlit tự xử lý layout, không bị sidebar che */
+.stChatInput textarea {
+    border-radius: 12px !important;
 }
 /* Thêm padding dưới cùng để tin nhắn không bị che bởi input */
 .stChatMessage:last-of-type {
-    margin-bottom: 80px;
+    margin-bottom: 20px;
 }
 </style>
 """, unsafe_allow_html=True)
