@@ -1,5 +1,5 @@
 [server]
-maxUploadSize = 200
+maxUploadSize = 5120
 
 [theme]
 primaryColor = "#6a11cb"
