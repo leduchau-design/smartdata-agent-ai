@@ -1,16 +1,76 @@
 import os
 import sys
 import re
-import requests
 import streamlit as st
 
 # Đảm bảo import được module từ thư mục src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import importlib
+try:
+    import src.chat_service
+    importlib.reload(src.chat_service)
+except Exception:
+    pass
+
+try:
+    import src.project_service
+    importlib.reload(src.project_service)
+except Exception:
+    pass
+
 from src.chat_service import (
     EXPERT_PERSONAS,
     stream_chat_response,
-    read_local_file
+    read_local_file,
+    read_zip_archive,
+    select_folder_dialog
 )
+
+# Import an toàn từ src.project_service kèm fallback dự phòng nếu module bị lock
+try:
+    from src.project_service import (
+        load_projects_history,
+        save_project_to_history,
+        list_project_files,
+        create_quick_start_project,
+        write_file_to_project,
+        parse_files_from_ai_reply,
+        parse_images_from_ai_reply,
+        run_python_file,
+        open_folder_in_explorer
+    )
+except ImportError:
+    from src.project_service import (
+        load_projects_history,
+        save_project_to_history,
+        list_project_files,
+        create_quick_start_project,
+        write_file_to_project,
+        parse_files_from_ai_reply,
+        open_folder_in_explorer
+    )
+    def parse_images_from_ai_reply(reply_text: str):
+        prompts = []
+        pattern = re.compile(r'\[IMAGE:\s*(.*?)\]', re.DOTALL)
+        for m in pattern.finditer(reply_text):
+            p = m.group(1).strip()
+            if p:
+                prompts.append(p)
+        return prompts
+
+    def run_python_file(folder_path: str, relative_file_path: str, timeout: int = 15):
+        import subprocess
+        try:
+            clean_dir = os.path.abspath(folder_path.strip().strip('"').strip("'"))
+            rel_clean = relative_file_path.strip().strip('"').strip("'").strip("/").strip("\\")
+            target_path = os.path.abspath(os.path.join(clean_dir, rel_clean))
+            if not os.path.exists(target_path):
+                return False, f"Không tìm thấy file: {rel_clean}"
+            res = subprocess.run([sys.executable, target_path], cwd=clean_dir, capture_output=True, text=True, timeout=timeout, encoding="utf-8", errors="replace")
+            return res.returncode == 0, (res.stdout.strip() if res.stdout.strip() else res.stderr.strip())
+        except Exception as e:
+            return False, str(e)
+
 from src.image_service import generate_ai_art_advanced, AVAILABLE_MODELS
 
 st.set_page_config(
@@ -79,6 +139,22 @@ if "chat_messages" not in st.session_state:
 if "generated_images" not in st.session_state:
     st.session_state.generated_images = []  # Lưu lịch sử ảnh đã tạo
 
+if "active_project" not in st.session_state:
+    _history = load_projects_history()
+    if _history and os.path.exists(_history[0].get("path", "")):
+        st.session_state.active_project = _history[0]
+    else:
+        st.session_state.active_project = None
+
+if "auto_write_code" not in st.session_state:
+    st.session_state.auto_write_code = True  # Mặc định tự động ghi code vào folder
+
+if "show_new_project_modal" not in st.session_state:
+    st.session_state.show_new_project_modal = False
+
+if "temp_project_path" not in st.session_state:
+    st.session_state.temp_project_path = ""
+
 # ==========================================
 # SIDEBAR: CẤU HÌNH & TÙY CHỌN CHUYÊN GIA
 # ==========================================
@@ -121,36 +197,139 @@ with st.sidebar:
         st.caption(f"ℹ️ *{EXPERT_PERSONAS.get(selected_persona_key, {}).get('desc', '')}*")
 
     st.markdown("---")
-    st.subheader("📁 Nạp Tệp/Tài Liệu (Tùy chọn)")
-    st.caption("AI không bị bó buộc vào thư mục nào. Bạn có thể tải file lên hoặc nhập đường dẫn file bất kỳ trên máy tính.")
+    st.subheader("📁 QUẢN LÝ DỰ ÁN (PROJECTS)")
 
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        if st.button("📁+ New Project", use_container_width=True, help="Tạo hoặc mở dự án từ thư mục máy tính"):
+            st.session_state.show_new_project_modal = not st.session_state.show_new_project_modal
+    with col_p2:
+        if st.button("⚡ Quick Start", use_container_width=True, help="Tạo nhanh dự án mẫu Quick Start"):
+            qpath, qname = create_quick_start_project()
+            st.session_state.active_project = {"name": qname, "path": qpath}
+            st.toast(f"✨ Đã khởi tạo dự án mẫu: {qname}!", icon="🚀")
+            st.rerun()
+
+    # Form nhập / chọn New Project
+    if st.session_state.show_new_project_modal:
+        with st.container(border=True):
+            st.markdown("##### 📁 Tạo / Mở Dự Án Mới")
+            p_name = st.text_input("Tên dự án:", placeholder="Ví dụ: Backend App, My Project...")
+            
+            if st.button("🔍 Mở cửa sổ chọn thư mục...", use_container_width=True):
+                picked_f = select_folder_dialog()
+                if picked_f:
+                    st.session_state.temp_project_path = picked_f
+                    st.rerun()
+
+            p_path = st.text_input(
+                "Đường dẫn thư mục dự án:",
+                value=st.session_state.temp_project_path,
+                placeholder="Ví dụ: D:\\python\\my-project"
+            )
+
+            col_sub1, col_sub2 = st.columns(2)
+            with col_sub1:
+                if st.button("✅ Mở Dự Án", use_container_width=True, type="primary"):
+                    if p_path.strip():
+                        clean_dir = os.path.abspath(p_path.strip().strip('"').strip("'"))
+                        os.makedirs(clean_dir, exist_ok=True)
+                        eff_name = p_name.strip() or os.path.basename(clean_dir) or "Dự án mới"
+                        save_project_to_history(clean_dir, eff_name)
+                        st.session_state.active_project = {"name": eff_name, "path": clean_dir}
+                        st.session_state.show_new_project_modal = False
+                        st.toast(f"🎉 Đã kết nối với dự án: {eff_name}!", icon="📁")
+                        st.rerun()
+                    else:
+                        st.error("Vui lòng cung cấp đường dẫn thư mục!")
+            with col_sub2:
+                if st.button("Đóng", use_container_width=True):
+                    st.session_state.show_new_project_modal = False
+                    st.rerun()
+
+    # Danh sách các dự án gần đây
+    proj_history = load_projects_history()
+    if proj_history:
+        history_names = [f"📁 {p['name']}" for p in proj_history]
+        active_idx = 0
+        if st.session_state.active_project:
+            for idx, p in enumerate(proj_history):
+                if os.path.abspath(p.get("path", "")) == os.path.abspath(st.session_state.active_project.get("path", "")):
+                    active_idx = idx
+                    break
+        selected_hist_idx = st.selectbox(
+            "Dự án gần đây:",
+            options=range(len(proj_history)),
+            index=active_idx,
+            format_func=lambda i: history_names[i]
+        )
+        if st.session_state.active_project != proj_history[selected_hist_idx]:
+            st.session_state.active_project = proj_history[selected_hist_idx]
+            st.rerun()
+
+    # Thẻ thông tin dự án đang chọn (Active Project)
     attached_text = None
-    # 1. Tải file từ máy tính
-    uploaded_any_file = st.file_uploader(
-        "Tải lên tệp (code, text, csv, json, md...):",
-        type=["py", "js", "ts", "html", "css", "json", "csv", "txt", "md", "sql", "yaml", "env", "sh"]
-    )
-    if uploaded_any_file is not None:
-        try:
-            raw_bytes = uploaded_any_file.read()
-            decoded_text = raw_bytes.decode("utf-8", errors="replace")
-            attached_text = f"=== TỆP TẢI LÊN: {uploaded_any_file.name} ===\n{decoded_text[:12000]}\n=== HẾT TỆP ==="
-            st.success(f"📎 Đã nhận tệp: `{uploaded_any_file.name}` ({len(decoded_text)} ký tự)")
-        except Exception as err:
-            st.error(f"Lỗi đọc file: {err}")
+    if st.session_state.active_project:
+        act_proj = st.session_state.active_project
+        act_path = act_proj.get("path", "")
+        with st.container(border=True):
+            st.markdown(f"🏷️ **Dự án:** `{act_proj.get('name')}`")
+            st.caption(f"📂 `{act_path}`")
+            
+            c_exp, c_rel = st.columns([1, 1])
+            with c_exp:
+                if st.button("🖥️ Mở Explorer", use_container_width=True, help="Mở thư mục trên máy tính"):
+                    open_folder_in_explorer(act_path)
+            with c_rel:
+                if st.button("🔄 Quét lại", use_container_width=True, help="Quét lại file dự án"):
+                    st.rerun()
 
-    # 2. Hoặc nhập đường dẫn trực tiếp trên máy tính
-    manual_file_path = st.text_input(
-        "Hoặc nhập đường dẫn file trên máy tính:",
-        placeholder="Ví dụ: C:\\Users\\Admin\\project\\main.py"
-    )
-    if manual_file_path:
-        local_content = read_local_file(manual_file_path)
-        if not local_content.startswith("[Lỗi"):
-            attached_text = local_content
-            st.success("✅ Đã nạp nội dung từ đường dẫn máy tính!")
-        else:
-            st.warning(local_content)
+            p_files = list_project_files(act_path)
+            with st.expander(f"🌳 Danh sách tệp ({len(p_files)} tệp)", expanded=False):
+                if p_files:
+                    for pf in p_files:
+                        st.text(f"📄 {pf}")
+                else:
+                    st.caption("Thư mục hiện đang trống. Hãy yêu cầu AI viết code!")
+
+        # Toggle tự động ghi code vào folder
+        st.session_state.auto_write_code = st.toggle(
+            "⚡ Tự động ghi code vào thư mục",
+            value=st.session_state.auto_write_code,
+            help="Bật chế độ này: Bất kỳ file nào AI sinh ra sẽ được tự động ghi thẳng vào thư mục dự án trên máy tính!"
+        )
+
+        # Nạp toàn bộ code dự án vào ngữ cảnh của AI
+        if os.path.exists(act_path):
+            attached_text = read_local_file(act_path)
+    else:
+        st.info("💡 Hãy bấm **📁+ New Project** hoặc **⚡ Quick Start** để chọn thư mục làm việc cho AI!")
+
+    # Khu vực tải thêm tệp/zip phụ ngoài lề
+    with st.expander("📎 Đính kèm tệp / zip ngoài lề (Tùy chọn)", expanded=False):
+        uploaded_extra_files = st.file_uploader(
+            "Tải file đính kèm thêm:",
+            type=["zip", "py", "js", "jsx", "ts", "tsx", "html", "css", "json", "csv", "txt", "md", "sql", "yaml", "yml", "env", "sh", "bat", "ps1", "java", "cpp", "c", "cs", "go", "rs", "php", "xml", "toml"],
+            accept_multiple_files=True,
+            key="extra_files_uploader"
+        )
+        if uploaded_extra_files:
+            extra_parts = []
+            for up_f in uploaded_extra_files:
+                if up_f.name.lower().endswith(".zip"):
+                    extra_parts.append(read_zip_archive(up_f.read(), filename=up_f.name))
+                else:
+                    raw_b = up_f.read().decode("utf-8", errors="replace")
+                    extra_parts.append(f"=== TỆP PHỤ: {up_f.name} ===\n{raw_b[:8000]}\n=== HẾT TỆP PHỤ ===")
+            if extra_parts:
+                extra_str = "\n\n".join(extra_parts)
+                attached_text = f"{attached_text}\n\n{extra_str}" if attached_text else extra_str
+                st.success(f"📎 Đã nhận {len(uploaded_extra_files)} tệp phụ!")
+
+    # Bản xem trước ngữ cảnh nạp
+    if attached_text:
+        with st.expander("👀 Xem trước ngữ cảnh AI nhận được", expanded=False):
+            st.text(attached_text[:2500] + ("\n...(Nội dung còn tiếp)..." if len(attached_text) > 2500 else ""))
 
     st.markdown("---")
     st.markdown("⚡ **Trạng thái AI:** Groq High-Speed LLM (`openai/gpt-oss-120b`)")
@@ -174,9 +353,61 @@ with tab_chat:
     st.markdown("Trao đổi tự do về **lập trình, phân tích vấn đề, giải thuật, viết tài liệu** hoặc bất kỳ chuyên môn nào bạn muốn.")
 
     # Hiển thị lịch sử chat
-    for msg in st.session_state.chat_messages:
+    for msg_idx, msg in enumerate(st.session_state.chat_messages):
         with st.chat_message(msg["role"], avatar="🧑‍💻" if msg["role"] == "user" else "🤖"):
             st.markdown(msg["content"])
+
+            # Hiển thị hình ảnh nếu có trong tin nhắn AI
+            if msg.get("role") == "assistant" and msg.get("images"):
+                for img_p in msg.get("images", []):
+                    if os.path.exists(img_p):
+                        st.image(img_p, caption="🎨 Ảnh AI tạo theo yêu cầu", use_container_width=True)
+                        with open(img_p, "rb") as f_img:
+                            st.download_button("📥 Tải ảnh về máy", data=f_img, file_name=os.path.basename(img_p), mime="image/jpeg", key=f"dl_img_{msg_idx}_{os.path.basename(img_p)}")
+
+            # Nếu là phản hồi của AI và có tệp code
+            if msg.get("role") == "assistant":
+                msg_files = msg.get("files") or parse_files_from_ai_reply(msg["content"])
+                if msg_files and st.session_state.active_project:
+                    act_path = st.session_state.active_project.get("path")
+                    with st.container(border=True):
+                        st.markdown(f"📦 **Phát hiện {len(msg_files)} tệp mã nguồn cho dự án:**")
+                        col_w_all, _ = st.columns([1, 1])
+                        with col_w_all:
+                            if st.button("⚡ Ghi tất cả vào thư mục", key=f"btn_write_all_{msg_idx}"):
+                                for mf in msg_files:
+                                    write_file_to_project(act_path, mf["file_path"], mf["content"])
+                                st.toast(f"🎉 Đã lưu {len(msg_files)} tệp vào thư mục dự án!", icon="💾")
+                                st.success(f"🎉 Đã ghi thành công {len(msg_files)} tệp vào: `{act_path}`")
+                                st.rerun()
+
+                        for f_idx, mf in enumerate(msg_files):
+                            c1, c2, c3 = st.columns([3, 1, 1])
+                            with c1:
+                                st.markdown(f"📄 **`{mf['file_path']}`** ({mf['lines']} dòng)")
+                            with c2:
+                                if st.button("💾 Ghi file", key=f"btn_write_{msg_idx}_{f_idx}"):
+                                    ok, fp, err = write_file_to_project(act_path, mf["file_path"], mf["content"])
+                                    if ok:
+                                        st.toast(f"✅ Đã ghi `{mf['file_path']}`", icon="💾")
+                                        st.success(f"✅ Đã lưu vào: `{fp}`")
+                                    else:
+                                        st.error(err)
+                            with c3:
+                                # Nút chạy file nếu là file Python
+                                if mf["file_path"].endswith(".py"):
+                                    if st.button("▶️ Chạy", key=f"btn_run_{msg_idx}_{f_idx}", help="Chạy file Python này ngay lập tức"):
+                                        # Ghi file trước khi chạy để đảm bảo phiên bản mới nhất
+                                        write_file_to_project(act_path, mf["file_path"], mf["content"])
+                                        ok_run, out_run = run_python_file(act_path, mf["file_path"])
+                                        st.session_state[f"run_out_{msg_idx}_{f_idx}"] = out_run
+
+                            # Hiển thị console output nếu đã bấm chạy
+                            if f"run_out_{msg_idx}_{f_idx}" in st.session_state:
+                                with st.expander(f"🖥️ Terminal Output: `{mf['file_path']}`", expanded=True):
+                                    st.code(st.session_state[f"run_out_{msg_idx}_{f_idx}"], language="bash")
+                elif msg_files and not st.session_state.active_project:
+                    st.caption("ℹ️ *Để ghi và chạy các tệp này trên máy tính, hãy chọn hoặc tạo dự án ở thanh bên trái.*")
 
     # Gợi ý nhanh nếu đoạn chat còn mới
     if len(st.session_state.chat_messages) <= 1:
@@ -187,14 +418,13 @@ with tab_chat:
             if st.button("🛠️ Viết ứng dụng CRUD bằng Python"):
                 prompt_preset = "Hãy hướng dẫn và viết code mẫu xây dựng một ứng dụng REST API CRUD hoàn chỉnh bằng FastAPI và SQLite, tuân thủ Clean Architecture."
         with col_s2:
-            if st.button("⚡ Tối ưu thuật toán & Cấu trúc dữ liệu"):
-                prompt_preset = "Giải thích sự khác biệt giữa mảng tĩnh và danh sách liên kết, kèm bài toán thực tế khi nào nên chọn cái nào."
+            if st.button("🎨 Tạo một bức tranh thành phố tương lai"):
+                prompt_preset = "Hãy tạo hình ảnh một thành phố tương lai cyberpunk với xe bay và ánh đèn neon rực rỡ, kèm mô tả thiết kế hệ thống."
         with col_s3:
             if st.button("📊 Phân tích cách xử lý dữ liệu lớn"):
                 prompt_preset = "So sánh hiệu năng giữa Polars và Pandas khi xử lý tập dữ liệu lớn hàng chục gigabyte."
 
         if prompt_preset:
-            # Thêm prompt vào phiên chat
             st.session_state.chat_messages.append({"role": "user", "content": prompt_preset})
             with st.chat_message("user", avatar="🧑‍💻"):
                 st.markdown(prompt_preset)
@@ -204,16 +434,47 @@ with tab_chat:
                 response_stream = stream_chat_response(
                     messages=chat_history,
                     persona_key=selected_persona_key,
-                    attached_content=attached_text
+                    attached_content=attached_text,
+                    custom_persona_prompt=custom_persona_prompt
                 )
                 full_reply = st.write_stream(response_stream)
-                st.session_state.chat_messages.append({"role": "assistant", "content": full_reply})
+                gen_files = parse_files_from_ai_reply(full_reply)
+                
+                # Tự động ghi code nếu bật auto_write_code
+                if gen_files and st.session_state.active_project and st.session_state.auto_write_code:
+                    act_p = st.session_state.active_project.get("path")
+                    written_names = []
+                    for gf in gen_files:
+                        ok, fp, err = write_file_to_project(act_p, gf["file_path"], gf["content"])
+                        if ok:
+                            written_names.append(gf["file_path"])
+                    if written_names:
+                        st.toast(f"⚡ Đã tự động lưu {len(written_names)} file vào thư mục!", icon="💾")
+                        st.success(f"⚡ **Đã tự động lưu {len(written_names)} file vào thư mục:** `{', '.join(written_names)}`")
+
+                # Kiểm tra và tạo ảnh nếu có yêu cầu
+                saved_imgs = []
+                img_prompts = parse_images_from_ai_reply(full_reply)
+                if not img_prompts and ("thành phố tương lai" in prompt_preset or "hình ảnh" in prompt_preset):
+                    img_prompts = [prompt_preset]
+                for ip in img_prompts:
+                    with st.spinner("🎨 Đang kết nối AI sinh hình ảnh..."):
+                        created_img = generate_ai_art_advanced(ip)
+                        if created_img:
+                            saved_imgs.append(created_img)
+                            st.image(created_img, caption="🎨 Ảnh AI tạo theo yêu cầu", use_container_width=True)
+
+                st.session_state.chat_messages.append({
+                    "role": "assistant",
+                    "content": full_reply,
+                    "files": gen_files,
+                    "images": saved_imgs
+                })
             st.rerun()
 
     # Khung nhập chat trực tiếp
-    user_input = st.chat_input("Nhập câu hỏi, yêu cầu viết code hoặc chủ đề thảo luận của bạn...")
+    user_input = st.chat_input("Nhập câu hỏi, yêu cầu viết code, tạo ảnh hoặc chạy kết quả...")
     if user_input:
-        # Thêm tin nhắn người dùng
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
         with st.chat_message("user", avatar="🧑‍💻"):
             st.markdown(user_input)
@@ -224,10 +485,45 @@ with tab_chat:
             response_stream = stream_chat_response(
                 messages=chat_history,
                 persona_key=selected_persona_key,
-                attached_content=attached_text
+                attached_content=attached_text,
+                custom_persona_prompt=custom_persona_prompt
             )
             full_reply = st.write_stream(response_stream)
-            st.session_state.chat_messages.append({"role": "assistant", "content": full_reply})
+            gen_files = parse_files_from_ai_reply(full_reply)
+
+            # Tự động ghi code nếu bật auto_write_code
+            if gen_files and st.session_state.active_project and st.session_state.auto_write_code:
+                act_p = st.session_state.active_project.get("path")
+                written_names = []
+                for gf in gen_files:
+                    ok, fp, err = write_file_to_project(act_p, gf["file_path"], gf["content"])
+                    if ok:
+                        written_names.append(gf["file_path"])
+                if written_names:
+                    st.toast(f"⚡ Đã tự động lưu {len(written_names)} file vào thư mục!", icon="💾")
+                    st.success(f"⚡ **Đã tự động lưu {len(written_names)} file vào thư mục:** `{', '.join(written_names)}`")
+
+            # Kiểm tra và tạo hình ảnh nếu người dùng hỏi hoặc AI xuất thẻ [IMAGE: ...]
+            saved_imgs = []
+            img_prompts = parse_images_from_ai_reply(full_reply)
+            u_lower = user_input.lower()
+            if not img_prompts and ("hinh anh" in u_lower or "hình ảnh" in u_lower or "tạo ảnh" in u_lower or "tao anh" in u_lower or "vẽ" in u_lower or "ve anh" in u_lower):
+                img_prompts = [user_input]
+
+            for ip in img_prompts:
+                with st.spinner("🎨 Đang gọi AI vẽ và hiển thị hình ảnh trực tiếp..."):
+                    created_img = generate_ai_art_advanced(ip)
+                    if created_img:
+                        saved_imgs.append(created_img)
+                        st.image(created_img, caption="🎨 Ảnh AI tạo theo yêu cầu", use_container_width=True)
+
+            st.session_state.chat_messages.append({
+                "role": "assistant",
+                "content": full_reply,
+                "files": gen_files,
+                "images": saved_imgs
+            })
+            st.rerun()
 
 
 # ------------------------------------------
@@ -448,21 +744,19 @@ with tab_image_gen:
             if not final_prompt:
                 st.warning("⚠️ Vui lòng nhập mô tả ảnh trước khi nhấn tạo!")
             else:
-                # Ghép negative prompt nếu có
-                full_prompt = final_prompt
-                if "negative_prompt" in dir() and negative_prompt:
-                    full_prompt = final_prompt  # Pollinations xử lý negative riêng
+                neg_prompt = negative_prompt.strip() if ("negative_prompt" in dir() and negative_prompt) else None
 
                 with st.spinner(f"🔮 Đang tạo ảnh với model **{final_model}**... Vui lòng chờ trong giây lát..."):
                     try:
                         seed_val = seed_input if seed_input > 0 else None
                         image_path = generate_ai_art_advanced(
-                            prompt=full_prompt,
+                            prompt=final_prompt,
                             width=img_width,
                             height=img_height,
                             model=final_model,
                             seed=seed_val,
-                            enhance=enhance_prompt
+                            enhance=enhance_prompt,
+                            negative_prompt=neg_prompt
                         )
 
                         if image_path and os.path.exists(image_path):

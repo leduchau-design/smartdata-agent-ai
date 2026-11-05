@@ -31,12 +31,14 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     persona: Optional[str] = "developer"
     attached_path: Optional[str] = None
+    custom_persona_prompt: Optional[str] = None
 
 class ImageGenRequest(BaseModel):
     prompt: str
     width: Optional[int] = 800
     height: Optional[int] = 800
     model: Optional[str] = "flux"
+    negative_prompt: Optional[str] = None
 
 class ChartCodeRequest(BaseModel):
     python_code: str
@@ -57,7 +59,8 @@ async def chat_endpoint(payload: ChatRequest):
         response_chunks = list(stream_chat_response(
             messages=msg_dicts,
             persona_key=payload.persona or "developer",
-            attached_content=attached_content
+            attached_content=attached_content,
+            custom_persona_prompt=payload.custom_persona_prompt
         ))
         full_text = "".join(response_chunks)
         return {"status": "success", "response": full_text}
@@ -86,7 +89,8 @@ async def generate_image_endpoint(payload: ImageGenRequest):
             prompt=payload.prompt,
             width=payload.width or 800,
             height=payload.height or 800,
-            model=payload.model or "flux"
+            model=payload.model or "flux",
+            negative_prompt=payload.negative_prompt
         )
         if image_path and os.path.exists(image_path):
             return {

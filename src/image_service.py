@@ -25,6 +25,7 @@ def generate_ai_art_advanced(
     seed: Optional[int] = None,
     enhance: bool = True,
     nologo: bool = True,
+    negative_prompt: Optional[str] = None,
 ) -> Optional[str]:
     """Tạo ảnh AI chất lượng cao từ văn bản prompt với nhiều tùy chọn model và kích thước.
     
@@ -36,6 +37,7 @@ def generate_ai_art_advanced(
         seed: Hạt giống ngẫu nhiên để tái tạo kết quả (None = ngẫu nhiên)
         enhance: Tự động nâng cao chất lượng prompt (True/False)
         nologo: Ẩn logo watermark (True/False)
+        negative_prompt: Những chi tiết không mong muốn trong ảnh
     
     Returns:
         Đường dẫn file ảnh đã lưu, hoặc None nếu thất bại
@@ -54,6 +56,8 @@ def generate_ai_art_advanced(
         }
         if seed is not None:
             params["seed"] = seed
+        if negative_prompt and negative_prompt.strip():
+            params["negative"] = urllib.parse.quote(negative_prompt.strip())
             
         param_str = "&".join(f"{k}={v}" for k, v in params.items())
         url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?{param_str}"

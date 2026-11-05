@@ -3,19 +3,22 @@
 ## 🎯 Mục tiêu dự án
 Dự án cung cấp một nền tảng **Trợ lý AI Chuyên gia Đa năng (AI Expert Copilot)** và **Hệ thống Multi-Agent Phân tích Dữ liệu Lớn (CrewAI + Polars)**:
 1. **Trò chuyện Mở Đa Chuyên Môn (Open Expert Chat)**: Thảo luận sâu sắc về lập trình (mọi ngôn ngữ, kiến trúc hệ thống, clean code, debug), khoa học dữ liệu, kinh doanh, học tập... mà **không bị gò bó bởi bất kỳ thư mục hay tệp tin nào**.
-2. **Linh Hoạt Đọc Tệp Bất Kỳ Đâu**: Bạn có thể trò chuyện tự do không cần file, hoặc kéo thả tệp, hoặc nhập trực tiếp đường dẫn file bất kỳ trên ổ cứng (C, D, E...) để AI phân tích.
-3. **Phân Tích Dữ Liệu & Dựng Mô Hình 3D Tự Động**: Tự động tổng hợp số liệu tốc độ cao bằng Polars và vẽ biểu đồ 2D/3D nổi khối trực quan.
+2. **Quản Lý Dự Án & Tự Động Ghi Mã Nguồn (Project Manager & Code Execution)**: Kết nối trực tiếp với thư mục dự án trên máy tính, tự động nhận diện file mã nguồn từ AI (`[FILE: ...]`), ghi thẳng vào ổ đĩa và cho phép chạy file Python ngay trong giao diện web.
+3. **Linh Hoạt Đọc Tệp & Tệp Nén Dự Án (.ZIP)**: Hỗ trợ nạp tệp đơn lẻ, thư mục dự án, hoặc giải nén tệp zip để đưa toàn bộ cấu trúc mã nguồn vào ngữ cảnh AI.
+4. **Phân Tích Dữ Liệu & Dựng Mô Hình 3D Tự Động**: Tự động tổng hợp số liệu tốc độ cao bằng Polars và vẽ biểu đồ 2D/3D nổi khối trực quan.
+5. **Tạo Hình Ảnh Nghệ Thuật AI (Text-to-Image)**: Tích hợp mô hình FLUX tạo ảnh nghệ thuật theo mô tả tự nhiên hoặc tự động sinh ảnh minh họa ngay trong luồng chat.
 
 ## 🛠️ Công nghệ sử dụng
 
 | Thành phần | Công nghệ | Mã nguồn mở (GitHub) |
 |------------|-----------|----------------------|
-| **Backend** | Python 3.10+, FastAPI, Uvicorn | [fastapi/fastapi](https://github.com/fastapi/fastapi) ・ [encode/uvicorn](https://github.com/encode/uvicorn) |
+| **Frontend UI** | Streamlit | [streamlit/streamlit](https://github.com/streamlit/streamlit) |
+| **Backend API** | Python 3.10+, FastAPI, Uvicorn | [fastapi/fastapi](https://github.com/fastapi/fastapi) ・ [encode/uvicorn](https://github.com/encode/uvicorn) |
 | **AI Agent Core** | CrewAI, CrewAI Tools | [crewAIInc/crewAI](https://github.com/crewAIInc/crewAI) ・ [crewAIInc/crewAI-tools](https://github.com/crewAIInc/crewAI-tools) |
 | **Data Engine** | Polars (Tối ưu hiệu năng cao) | [pola-rs/polars](https://github.com/pola-rs/polars) |
-| **Frontend** | Streamlit | [streamlit/streamlit](https://github.com/streamlit/streamlit) |
+| **Image Generation** | Pollinations AI (FLUX Models) | [pollinations/pollinations](https://github.com/pollinations/pollinations) |
 | **Validation** | Pydantic | [pydantic/pydantic](https://github.com/pydantic/pydantic) |
-| **LLM SDK** | OpenAI Python | [openai/openai-python](https://github.com/openai/openai-python) |
+| **LLM SDK** | OpenAI Python (Groq / Gemini / OpenAI) | [openai/openai-python](https://github.com/openai/openai-python) |
 
 ---
 
@@ -37,16 +40,25 @@ flowchart LR
 ## 📂 Cấu Trúc Dự Án
 
 ```
-SmartData-Agent/
-├── src/                        # Backend core
-│   ├── main.py                 # FastAPI server - điểm khởi chạy backend
-│   ├── agents.py               # Định nghĩa CrewAI Agent & Task
-│   └── tools.py                # Công cụ xử lý dữ liệu bằng Polars
+smartdata-agent-ai/
+├── src/                        # Core backend & AI services
+│   ├── main.py                 # FastAPI server - điểm khởi chạy backend REST API
+│   ├── agents.py               # Định nghĩa CrewAI Agent & Task phân tích dữ liệu
+│   ├── tools.py                # Công cụ xử lý dữ liệu bằng Polars & vẽ biểu đồ 2D/3D
+│   ├── chat_service.py         # Quản lý streaming chat, personas & nạp ngữ cảnh (file/folder/zip)
+│   ├── project_service.py      # Quản lý dự án, quét file, ghi code & chạy mã nguồn Python
+│   └── image_service.py        # Dịch vụ Text-to-Image AI nâng cao (FLUX models)
 ├── frontend/
-│   └── app.py                  # Giao diện người dùng Streamlit
-├── data/
-│   └── sample_sales.csv        # Dữ liệu mẫu (10 đơn hàng)
-├── requirements.txt            # Các thư viện cần thiết
+│   └── app.py                  # Giao diện người dùng Streamlit hoàn chỉnh (3 Tabs)
+├── data/                       # Thư mục dữ liệu & biểu đồ
+│   ├── charts/                 # Biểu đồ và ảnh AI được tạo tự động
+│   └── *.csv                   # Dữ liệu bảng mẫu thử nghiệm
+├── requirements.txt            # Danh sách thư viện Python cần thiết
+├── deploy_to_github.py         # Script hỗ trợ deploy GitHub
+├── run_all.bat                 # Script khởi động đồng thời cả Backend và Frontend
+├── run_frontend.bat            # Script khởi động nhanh Frontend Streamlit
+├── run_backend.bat             # Script khởi động nhanh Backend FastAPI
+├── run_with_ngrok.bat          # Script chia sẻ ứng dụng ra Internet qua Ngrok
 ├── .gitignore
 └── README.md
 ```

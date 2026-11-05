@@ -25,6 +25,18 @@ def get_llm():
     groq_key = os.getenv("GROQ_API_KEY")
     gemini_key = os.getenv("GEMINI_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
+
+    # Đọc từ Streamlit Secrets nếu chạy trên Streamlit Cloud
+    try:
+        import streamlit as st
+        if not groq_key:
+            groq_key = st.secrets.get("GROQ_API_KEY", None)
+        if not gemini_key:
+            gemini_key = st.secrets.get("GEMINI_API_KEY", None)
+        if not openai_key:
+            openai_key = st.secrets.get("OPENAI_API_KEY", None)
+    except Exception:
+        pass
     
     if groq_key:
         return LLM(

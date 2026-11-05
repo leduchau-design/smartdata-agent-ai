@@ -9,7 +9,7 @@ import urllib.error
 
 TOKEN = "your_github_token_here"
 USERNAME = "leduchau-design"
-REPO_NAME = "smartdata-agent"
+REPO_NAME = "smartdata-agent-ai"
 BASE_DIR = r"d:\python\du an"
 
 HEADERS = {
@@ -26,6 +26,7 @@ FILES_TO_PUSH = [
     "src/agents.py",
     "src/chat_service.py",
     "src/image_service.py",
+    "src/project_service.py",
     "src/main.py",
     "src/tools.py",
     "requirements.txt",
