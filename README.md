@@ -26,35 +26,34 @@ Dự án cung cấp một nền tảng **Trợ lý AI Chuyên gia Đa năng (AI 
 
 ```mermaid
 flowchart TD
-    subgraph UI ["🖥️ TẦNG GIAO DIỆN (Frontend)"]
-        APP["frontend/app.py\n(Streamlit - 3 Tabs Trải Nghiệm)"]
+    subgraph UI ["TANG GIAO DIEN - Frontend"]
+        APP["frontend/app.py\nStreamlit - 3 Tabs"]
     end
 
-    subgraph CORE ["🧠 TẦNG NGHIỆP VỤ & AI SERVICES (src/)"]
-        CHAT["src/chat_service.py\n• Streaming LLM (Groq/OpenAI)\n• Đọc Folder / Zip / File\n• Quản lý Personas"]
-        PROJ["src/project_service.py\n• Bóc tách [FILE: ...]\n• Ghi code vào ổ đĩa\n• Chạy code Python (Subprocess)"]
-        IMG["src/image_service.py\n• Pollinations FLUX Models\n• Sinh ảnh AI theo Prompt\n• Vẽ biểu đồ bằng Matplotlib"]
-        AGENTS["src/agents.py\n• Điều phối CrewAI Agent\n• Phân công nhiệm vụ"]
-        TOOLS["src/tools.py\n• Polars Engine (tính toán CSV)\n• Vẽ biểu đồ 2D & 3D"]
+    subgraph CORE ["TANG NGHIEP VU & AI SERVICES - src/"]
+        CHAT["chat_service.py\nStreaming LLM\nDoc Folder/Zip/File\nQuan ly Personas"]
+        PROJ["project_service.py\nBoc tach FILE tag\nGhi code vao o dia\nChay Python - Subprocess"]
+        IMG["image_service.py\nPollinations FLUX\nSinh anh AI theo Prompt"]
+        AGENTS["agents.py\nDieu phoi CrewAI\nPhan cong nhiem vu"]
+        TOOLS["tools.py\nPolars Engine\nBieu do 2D va 3D"]
     end
 
-    subgraph API ["⚡ TẦNG BACKEND REST API (Tùy chọn)"]
-        MAIN["src/main.py\n(FastAPI Server cổng 8000)"]
+    subgraph API ["TANG BACKEND REST API"]
+        MAIN["src/main.py\nFastAPI Server port 8000"]
     end
 
-    %% Mối quan hệ bổ trợ
-    APP -->|Gọi hội thoại & đọc ngữ cảnh| CHAT
-    APP -->|Bóc tách code & Chạy file .py| PROJ
-    APP -->|Gọi vẽ tranh AI| IMG
-    APP -->|Kích hoạt phân tích dữ liệu| AGENTS
+    APP -->|Goi hoi thoai va doc ngu canh| CHAT
+    APP -->|Boc tach code va chay .py| PROJ
+    APP -->|Goi ve tranh AI| IMG
+    APP -->|Kich hoat phan tich du lieu| AGENTS
 
-    CHAT -->|Được gắn cờ [FILE:] & [IMAGE:]| PROJ
-    CHAT -->|Kích hoạt tạo ảnh tự động| IMG
-    AGENTS -->|Gọi các công cụ tính toán & vẽ| TOOLS
+    CHAT -->|Xuat nhan FILE va IMAGE| PROJ
+    CHAT -->|Kich hoat tao anh tu dong| IMG
+    AGENTS -->|Goi cong cu tinh toan va ve| TOOLS
 
-    MAIN -->|Bọc thành REST API| CHAT
-    MAIN -->|Bọc thành REST API| AGENTS
-    MAIN -->|Bọc thành REST API| IMG
+    MAIN -->|Boc thanh REST API| CHAT
+    MAIN -->|Boc thanh REST API| AGENTS
+    MAIN -->|Boc thanh REST API| IMG
 ```
 
 ### 🧩 Cơ Chế Hoạt Động & Sự Bổ Trợ Giữa Các Modules:
