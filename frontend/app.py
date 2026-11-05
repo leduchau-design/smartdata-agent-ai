@@ -215,18 +215,43 @@ with st.sidebar:
         with st.container(border=True):
             st.markdown("##### 📁 Tạo / Mở Dự Án Mới")
             p_name = st.text_input("Tên dự án:", placeholder="Ví dụ: Backend App, My Project...")
-            
-            if st.button("🔍 Mở cửa sổ chọn thư mục...", use_container_width=True):
-                picked_f = select_folder_dialog()
-                if picked_f:
-                    st.session_state.temp_project_path = picked_f
-                    st.rerun()
+
+            # Gợi ý thư mục nhanh phổ biến
+            st.caption("📌 **Chọn nhanh thư mục phổ biến:**")
+            quick_dirs = {
+                "🖥️ Desktop": os.path.join(os.path.expanduser("~"), "Desktop"),
+                "📄 Documents": os.path.join(os.path.expanduser("~"), "Documents"),
+                "📂 Downloads": os.path.join(os.path.expanduser("~"), "Downloads"),
+                "🐍 D:\\python": "D:\\python",
+                "📁 C:\\Projects": "C:\\Projects",
+            }
+            q_cols = st.columns(3)
+            for i, (label, qpath) in enumerate(quick_dirs.items()):
+                with q_cols[i % 3]:
+                    if st.button(label, key=f"quick_dir_{i}", use_container_width=True):
+                        if os.path.exists(qpath):
+                            st.session_state.temp_project_path = qpath
+                        else:
+                            st.session_state.temp_project_path = qpath
+                        st.rerun()
+
+            st.caption(
+                "💡 **Cách lấy đường dẫn nhanh trên Windows:**  \n"
+                "Mở File Explorer → vào thư mục muốn chọn → "
+                "nhấn vào **thanh địa chỉ** trên cùng → **Ctrl+C** → paste vào ô bên dưới."
+            )
 
             p_path = st.text_input(
-                "Đường dẫn thư mục dự án:",
+                "📂 Đường dẫn thư mục dự án (paste vào đây):",
                 value=st.session_state.temp_project_path,
-                placeholder="Ví dụ: D:\\python\\my-project"
+                placeholder="Ví dụ: D:\\python\\my-project hoặc C:\\Users\\Admin\\Desktop\\MyApp"
             )
+
+            # Nếu đã có path hợp lệ → preview tên thư mục
+            if p_path.strip() and os.path.exists(p_path.strip().strip('"').strip("'")):
+                st.success(f"✅ Thư mục hợp lệ: `{os.path.basename(p_path.strip().strip(chr(34)).strip(chr(39)))}`")
+            elif p_path.strip():
+                st.info("📁 Thư mục chưa tồn tại — sẽ được tạo mới khi bấm Mở Dự Án.")
 
             col_sub1, col_sub2 = st.columns(2)
             with col_sub1:
@@ -238,10 +263,11 @@ with st.sidebar:
                         save_project_to_history(clean_dir, eff_name)
                         st.session_state.active_project = {"name": eff_name, "path": clean_dir}
                         st.session_state.show_new_project_modal = False
+                        st.session_state.temp_project_path = ""
                         st.toast(f"🎉 Đã kết nối với dự án: {eff_name}!", icon="📁")
                         st.rerun()
                     else:
-                        st.error("Vui lòng cung cấp đường dẫn thư mục!")
+                        st.error("Vui lòng nhập đường dẫn thư mục!")
             with col_sub2:
                 if st.button("Đóng", use_container_width=True):
                     st.session_state.show_new_project_modal = False
