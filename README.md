@@ -57,20 +57,61 @@ flowchart TD
     MAIN -->|Bọc thành REST API| IMG
 ```
 
-### 🧩 Cơ Chế Hoạt Động & Sự Bổ Trợ Giữa Các Modules:
+### 🧩 2. Vai Trò Từng Module & Cách Bổ Trợ Cho Nhau
 
-1. **`src/chat_service.py` 🤝 `src/project_service.py` (Bộ não tư duy & Tay chân thực thi):**
-   - `chat_service.py`: Nhận diện thư mục hoặc giải nén tệp zip dự án làm ngữ cảnh. Huấn luyện prompt buộc AI phải gán nhãn `[FILE: duong_dan/file.ext]` khi viết code và `[IMAGE: ...]` khi vẽ ảnh.
-   - `project_service.py`: Dùng Regex phân tích câu trả lời từ `chat_service.py`, bóc tách các file mã nguồn, tự động tạo thư mục và ghi code xuống ổ đĩa, đồng thời cho phép chạy file Python ngay trong giao diện web.
-2. **`src/agents.py` 🤝 `src/tools.py` (Chuyên viên phân tích & Hộp công cụ tính toán):**
-   - `tools.py`: Cung cấp các hàm xử lý dữ liệu tốc độ cao bằng **Polars** và thuật toán dựng biểu đồ không gian ba chiều **Matplotlib 3D**.
-   - `agents.py`: Sử dụng **CrewAI** làm bộ não điều phối, phân tích câu hỏi tự nhiên của người dùng để quyết định chọn đúng công cụ trong `tools.py`.
-3. **`src/image_service.py` (Dịch vụ tạo hình ảnh đa nhiệm):**
-   - Vừa phục vụ riêng cho Tab 3 (Text-to-Image Studio với các model FLUX, Anime, Realism, 3D), vừa bổ trợ trực tiếp cho Tab 1 (`chat_service.py`) để tự động sinh ảnh minh họa ngay khi người dùng yêu cầu trong luồng trò chuyện.
-4. **`frontend/app.py` (Trung tâm kết nối và điều khiển):**
-   - Tích hợp toàn bộ các service trên vào 3 Tabs trực quan, xử lý trạng thái phiên làm việc (`st.session_state`), quản lý dự án gần đây và hiển thị giao diện người dùng thời gian thực.
-5. **`src/main.py` (Cổng kết nối mở rộng):**
-   - Đóng gói toàn bộ logic cốt lõi thành các chuẩn RESTful API (`/api/chat`, `/api/analyze`, `/api/generate-image`), sẵn sàng phục vụ cho ứng dụng Mobile hoặc các hệ thống bên ngoài khác.
+#### 💬 Nhóm 1: Cặp bài trùng Lập trình & Quản lý Dự án
+> **`src/chat_service.py` 🤝 `src/project_service.py`**
+
+* **`src/chat_service.py` (Bộ não tư duy & nạp ngữ cảnh):**
+  * Đọc toàn bộ thư mục dự án hoặc giải nén tệp `.zip` để nạp code làm "ngữ cảnh" cho AI.
+  * Cài đặt quy tắc ngầm vào System Prompt: Bắt AI khi viết code phải gắn nhãn `[FILE: duong_dan/file.ext]`, khi muốn tạo ảnh phải gắn nhãn `[IMAGE: ...]`.
+  * Quản lý các vai trò chuyên môn (Personas) và cơ chế tự động chuyển model dự phòng khi nghẽn hạn mức tốc độ token (TPM fallback).
+* **`src/project_service.py` (Tay chân thực thi trên ổ cứng):**
+  * Nhận câu trả lời từ `chat_service.py`, dùng Regex bóc tách chính xác các file mã nguồn từ thẻ `[FILE: ...]`.
+  * Ghi đè hoặc tạo mới file thẳng vào thư mục trên máy tính của bạn.
+  * Cung cấp hàm `run_python_file()` để chạy file `.py` vừa sinh và bắn kết quả console về giao diện web.
+* 👉 **Bổ trợ:** `chat_service` biết **phải viết cái gì**, còn `project_service` biến code thành **file thật trên máy tính** và **chạy thử**.
+
+---
+
+#### 📊 Nhóm 2: Cặp bài trùng Phân tích Dữ liệu Lớn & Dựng Hình 3D
+> **`src/agents.py` 🤝 `src/tools.py`**
+
+* **`src/tools.py` (Hộp công cụ xử lý số liệu & đồ họa):**
+  * Dùng thư viện **Polars** cực nhanh để tính toán: `aggregate_sales`, `filter_data`, `calculate_statistics`, `get_top_records`.
+  * Dùng **Matplotlib 3D** dựng biểu đồ khối hộp không gian 3 chiều (`generate_3d_chart`) và biểu đồ 2D (`generate_chart`).
+* **`src/agents.py` (Chỉ huy thông minh - CrewAI):**
+  * Đóng vai trò chuyên viên phân tích. Khi người dùng đặt câu hỏi bằng tiếng Việt (ví dụ: *"vẽ biểu đồ 3D doanh thu"*), Agent sẽ suy luận xem cần bốc công cụ nào trong `tools.py` ra dùng.
+* 👉 **Bổ trợ:** `tools.py` chứa **công thức tính toán và thuật toán vẽ**, còn `agents.py` là **người quyết định khi nào gọi công cụ nào**.
+
+---
+
+#### 🎨 Nhóm 3: Dịch vụ Hình ảnh Đa năng
+> **`src/image_service.py`**
+
+* Kết nối trực tiếp với API của **Pollinations AI (mô hình FLUX, Anime, Realism, 3D, Turbo)**.
+* **Bổ trợ cho cả 2 nơi:**
+  1. Bổ trợ cho **Tab 3** để người dùng tự gõ prompt vẽ tranh (chọn kích thước, model, negative prompt).
+  2. Bổ trợ cho **Tab 1 (`chat_service`)**: Khi bạn chat với AI mà nhắc đến *"vẽ con mèo"*, `chat_service` xuất thẻ `[IMAGE: a cute cat]`, hàm trong `image_service` sẽ được gọi ngay lập tức để vẽ và nhúng ảnh vào giữa đoạn chat.
+
+---
+
+#### 🖥️ Nhóm 4: Trung tâm Kết nối & Hiển thị
+> **`frontend/app.py`**
+
+* Là nơi **hội tụ của tất cả các module trên**:
+  * Gọi `chat_service` để stream câu trả lời từng chữ một.
+  * Gọi `project_service` để hiển thị nút "Ghi file", "Chạy file Python".
+  * Gọi `agents` để hiển thị biểu đồ 3D khi phân tích file CSV.
+  * Gọi `image_service` để hiển thị preview ảnh và nút download.
+
+---
+
+#### ⚡ Nhóm 5: Tầng API Độc Lập
+> **`src/main.py`**
+
+* Đóng gói toàn bộ các service trên thành các **REST API endpoint** (`/api/chat`, `/api/analyze`, `/api/generate-image`).
+* **Mục đích:** Nếu sau này bạn muốn viết thêm App Mobile (Flutter/React Native) hoặc tích hợp vào website khác mà không dùng Streamlit, bạn chỉ cần bật `src/main.py` lên là có sẵn Backend hoàn chỉnh để gọi.
 
 ---
 
