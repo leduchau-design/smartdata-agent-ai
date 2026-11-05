@@ -22,20 +22,57 @@ Dự án cung cấp một nền tảng **Trợ lý AI Chuyên gia Đa năng (AI 
 
 ---
 
-## 🏗️ Kiến Trúc Tổng Quan
+## 🏗️ Kiến Trúc Tổng Quan & Mối Quan Hệ Giữa Các Modules
 
 ```mermaid
-flowchart LR
-    A["👤 Người dùng\n(Trình duyệt)"] -->|"Upload CSV +\nNhập câu hỏi"| B["🖥️ Frontend\nStreamlit\n(frontend/app.py)"]
-    B -->|"POST /api/analyze\n{file_path, question}"| C["⚡ Backend\nFastAPI\n(src/main.py)"]
-    C -->|"Tạo Crew"| D["🤖 CrewAI Agent\n(src/agents.py)"]
-    D -->|"Gọi tools"| E["🔧 Tools\nPolars\n(src/tools.py)"]
-    E -->|"Đọc/Xử lý"| F["📊 File CSV\n(data/)"]
-    E -->|"Kết quả"| D
-    D -->|"Phân tích xong"| C
-    C -->|"JSON Response"| B
-    B -->|"Hiển thị kết quả"| A
+flowchart TD
+    subgraph UI ["🖥️ TẦNG GIAO DIỆN (Frontend)"]
+        APP["frontend/app.py\n(Streamlit - 3 Tabs Trải Nghiệm)"]
+    end
+
+    subgraph CORE ["🧠 TẦNG NGHIỆP VỤ & AI SERVICES (src/)"]
+        CHAT["src/chat_service.py\n• Streaming LLM (Groq/OpenAI)\n• Đọc Folder / Zip / File\n• Quản lý Personas"]
+        PROJ["src/project_service.py\n• Bóc tách [FILE: ...]\n• Ghi code vào ổ đĩa\n• Chạy code Python (Subprocess)"]
+        IMG["src/image_service.py\n• Pollinations FLUX Models\n• Sinh ảnh AI theo Prompt\n• Vẽ biểu đồ bằng Matplotlib"]
+        AGENTS["src/agents.py\n• Điều phối CrewAI Agent\n• Phân công nhiệm vụ"]
+        TOOLS["src/tools.py\n• Polars Engine (tính toán CSV)\n• Vẽ biểu đồ 2D & 3D"]
+    end
+
+    subgraph API ["⚡ TẦNG BACKEND REST API (Tùy chọn)"]
+        MAIN["src/main.py\n(FastAPI Server cổng 8000)"]
+    end
+
+    %% Mối quan hệ bổ trợ
+    APP -->|Gọi hội thoại & đọc ngữ cảnh| CHAT
+    APP -->|Bóc tách code & Chạy file .py| PROJ
+    APP -->|Gọi vẽ tranh AI| IMG
+    APP -->|Kích hoạt phân tích dữ liệu| AGENTS
+
+    CHAT -->|Được gắn cờ [FILE:] & [IMAGE:]| PROJ
+    CHAT -->|Kích hoạt tạo ảnh tự động| IMG
+    AGENTS -->|Gọi các công cụ tính toán & vẽ| TOOLS
+
+    MAIN -->|Bọc thành REST API| CHAT
+    MAIN -->|Bọc thành REST API| AGENTS
+    MAIN -->|Bọc thành REST API| IMG
 ```
+
+### 🧩 Cơ Chế Hoạt Động & Sự Bổ Trợ Giữa Các Modules:
+
+1. **`src/chat_service.py` 🤝 `src/project_service.py` (Bộ não tư duy & Tay chân thực thi):**
+   - `chat_service.py`: Nhận diện thư mục hoặc giải nén tệp zip dự án làm ngữ cảnh. Huấn luyện prompt buộc AI phải gán nhãn `[FILE: duong_dan/file.ext]` khi viết code và `[IMAGE: ...]` khi vẽ ảnh.
+   - `project_service.py`: Dùng Regex phân tích câu trả lời từ `chat_service.py`, bóc tách các file mã nguồn, tự động tạo thư mục và ghi code xuống ổ đĩa, đồng thời cho phép chạy file Python ngay trong giao diện web.
+2. **`src/agents.py` 🤝 `src/tools.py` (Chuyên viên phân tích & Hộp công cụ tính toán):**
+   - `tools.py`: Cung cấp các hàm xử lý dữ liệu tốc độ cao bằng **Polars** và thuật toán dựng biểu đồ không gian ba chiều **Matplotlib 3D**.
+   - `agents.py`: Sử dụng **CrewAI** làm bộ não điều phối, phân tích câu hỏi tự nhiên của người dùng để quyết định chọn đúng công cụ trong `tools.py`.
+3. **`src/image_service.py` (Dịch vụ tạo hình ảnh đa nhiệm):**
+   - Vừa phục vụ riêng cho Tab 3 (Text-to-Image Studio với các model FLUX, Anime, Realism, 3D), vừa bổ trợ trực tiếp cho Tab 1 (`chat_service.py`) để tự động sinh ảnh minh họa ngay khi người dùng yêu cầu trong luồng trò chuyện.
+4. **`frontend/app.py` (Trung tâm kết nối và điều khiển):**
+   - Tích hợp toàn bộ các service trên vào 3 Tabs trực quan, xử lý trạng thái phiên làm việc (`st.session_state`), quản lý dự án gần đây và hiển thị giao diện người dùng thời gian thực.
+5. **`src/main.py` (Cổng kết nối mở rộng):**
+   - Đóng gói toàn bộ logic cốt lõi thành các chuẩn RESTful API (`/api/chat`, `/api/analyze`, `/api/generate-image`), sẵn sàng phục vụ cho ứng dụng Mobile hoặc các hệ thống bên ngoài khác.
+
+---
 
 ## 📂 Cấu Trúc Dự Án
 
