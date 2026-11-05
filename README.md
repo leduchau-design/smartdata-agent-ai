@@ -365,3 +365,35 @@ Dự án được xây dựng dựa trên các thư viện mã nguồn mở sau:
 
 ## 📝 License
 MIT
+
+---
+
+## ⚡ Hướng Dẫn Chạy Main Trong Terminal
+
+Mở Terminal (PowerShell hoặc CMD) tại thư mục gốc của dự án `d:\python\du an`:
+
+### 1. Kích hoạt môi trường ảo (nếu dùng `venv`):
+```powershell
+.\venv\Scripts\activate
+```
+
+### 2. Chạy Backend FastAPI (`src/main.py`):
+```powershell
+# Chạy trực tiếp qua module
+python -m src.main
+
+# Hoặc chạy qua uvicorn tự reload khi sửa code
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 3. Chạy Giao diện Web chính Streamlit (`frontend/app.py`):
+```powershell
+streamlit run frontend/app.py
+```
+
+### 4. Chạy nhanh bằng script `.bat`:
+```powershell
+.\run_all.bat       # Khởi động cả Backend và Frontend
+.\run_backend.bat   # Chỉ khởi động Backend
+.\run_frontend.bat  # Chỉ khởi động Frontend
+```
