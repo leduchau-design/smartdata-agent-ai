@@ -57,7 +57,9 @@ flowchart TD
     MAIN -->|Bọc thành REST API| IMG
 ```
 
-### 🧩 2. Vai Trò Từng Module & Cách Bổ Trợ Cho Nhau
+### 🧩 Cơ Chế Hoạt Động & Sự Bổ Trợ Giữa Các Modules:
+
+---
 
 #### 💬 Nhóm 1: Cặp bài trùng Lập trình & Quản lý Dự án
 > **`src/chat_service.py` 🤝 `src/project_service.py`**
@@ -65,7 +67,7 @@ flowchart TD
 * **`src/chat_service.py` (Bộ não tư duy & nạp ngữ cảnh):**
   * Đọc toàn bộ thư mục dự án hoặc giải nén tệp `.zip` để nạp code làm "ngữ cảnh" cho AI.
   * Cài đặt quy tắc ngầm vào System Prompt: Bắt AI khi viết code phải gắn nhãn `[FILE: duong_dan/file.ext]`, khi muốn tạo ảnh phải gắn nhãn `[IMAGE: ...]`.
-  * Quản lý các vai trò chuyên môn (Personas) và cơ chế tự động chuyển model dự phòng khi nghẽn hạn mức tốc độ token (TPM fallback).
+  * Quản lý các vai trò chuyên môn (Personas) và cơ chế tự động chuyển model dự phòng khi nghẽn hạn mức tốc độ token (TPM Fallback: `gpt-oss-120b` → `gpt-oss-20b` → `qwen3.8-27b`).
 * **`src/project_service.py` (Tay chân thực thi trên ổ cứng):**
   * Nhận câu trả lời từ `chat_service.py`, dùng Regex bóc tách chính xác các file mã nguồn từ thẻ `[FILE: ...]`.
   * Ghi đè hoặc tạo mới file thẳng vào thư mục trên máy tính của bạn.
@@ -82,6 +84,7 @@ flowchart TD
   * Dùng **Matplotlib 3D** dựng biểu đồ khối hộp không gian 3 chiều (`generate_3d_chart`) và biểu đồ 2D (`generate_chart`).
 * **`src/agents.py` (Chỉ huy thông minh - CrewAI):**
   * Đóng vai trò chuyên viên phân tích. Khi người dùng đặt câu hỏi bằng tiếng Việt (ví dụ: *"vẽ biểu đồ 3D doanh thu"*), Agent sẽ suy luận xem cần bốc công cụ nào trong `tools.py` ra dùng.
+  * Hỗ trợ cả 3 loại API Key: Groq, Gemini và OpenAI — tự nhận diện và chọn phù hợp.
 * 👉 **Bổ trợ:** `tools.py` chứa **công thức tính toán và thuật toán vẽ**, còn `agents.py` là **người quyết định khi nào gọi công cụ nào**.
 
 ---
@@ -89,9 +92,10 @@ flowchart TD
 #### 🎨 Nhóm 3: Dịch vụ Hình ảnh Đa năng
 > **`src/image_service.py`**
 
-* Kết nối trực tiếp với API của **Pollinations AI (mô hình FLUX, Anime, Realism, 3D, Turbo)**.
+* Kết nối trực tiếp với API của **Pollinations AI (mô hình FLUX, FLUX Realism, FLUX Anime, FLUX 3D, Turbo)**.
+* Hỗ trợ tham số nâng cao: kích thước ảnh (512px–1536px), `seed` tái tạo lại ảnh, `negative_prompt` loại bỏ chi tiết không muốn, `enhance` tối ưu tự động prompt.
 * **Bổ trợ cho cả 2 nơi:**
-  1. Bổ trợ cho **Tab 3** để người dùng tự gõ prompt vẽ tranh (chọn kích thước, model, negative prompt).
+  1. Bổ trợ cho **Tab 3** để người dùng tự gõ prompt vẽ tranh với toàn bộ tùy chọn nâng cao.
   2. Bổ trợ cho **Tab 1 (`chat_service`)**: Khi bạn chat với AI mà nhắc đến *"vẽ con mèo"*, `chat_service` xuất thẻ `[IMAGE: a cute cat]`, hàm trong `image_service` sẽ được gọi ngay lập tức để vẽ và nhúng ảnh vào giữa đoạn chat.
 
 ---
@@ -100,18 +104,21 @@ flowchart TD
 > **`frontend/app.py`**
 
 * Là nơi **hội tụ của tất cả các module trên**:
-  * Gọi `chat_service` để stream câu trả lời từng chữ một.
-  * Gọi `project_service` để hiển thị nút "Ghi file", "Chạy file Python".
-  * Gọi `agents` để hiển thị biểu đồ 3D khi phân tích file CSV.
-  * Gọi `image_service` để hiển thị preview ảnh và nút download.
+  * Gọi `chat_service` để stream câu trả lời từng chữ một theo thời gian thực.
+  * Gọi `project_service` để hiển thị nút **"Ghi file"**, **"Chạy file Python"** kèm Terminal Output.
+  * Gọi `agents` để khởi tạo CrewAI và hiển thị biểu đồ 2D/3D khi phân tích file CSV.
+  * Gọi `image_service` để hiển thị preview ảnh và nút download trong cả Tab 1 và Tab 3.
 
 ---
 
-#### ⚡ Nhóm 5: Tầng API Độc Lập
+#### ⚡ Nhóm 5: Tầng API Độc Lập & Mở Rộng
 > **`src/main.py`**
 
-* Đóng gói toàn bộ các service trên thành các **REST API endpoint** (`/api/chat`, `/api/analyze`, `/api/generate-image`).
-* **Mục đích:** Nếu sau này bạn muốn viết thêm App Mobile (Flutter/React Native) hoặc tích hợp vào website khác mà không dùng Streamlit, bạn chỉ cần bật `src/main.py` lên là có sẵn Backend hoàn chỉnh để gọi.
+* Đóng gói toàn bộ các service trên thành các **REST API endpoint** chuẩn:
+  * `POST /api/chat` — Nhận tin nhắn và trả về câu trả lời AI.
+  * `POST /api/analyze` — Nhận file CSV và câu hỏi, trả về phân tích CrewAI kèm biểu đồ.
+  * `POST /api/generate-image` — Nhận prompt và trả về đường dẫn ảnh AI đã tạo.
+* **Mục đích:** Nếu sau này bạn muốn viết thêm App Mobile (Flutter/React Native) hoặc tích hợp vào website khác mà không dùng Streamlit, chỉ cần bật `src/main.py` lên là có sẵn Backend hoàn chỉnh.
 
 ---
 
